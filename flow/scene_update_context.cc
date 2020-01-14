@@ -236,38 +236,20 @@ SceneUpdateContext::Entity::Entity(SceneUpdateContext& context)
 
 SceneUpdateContext::Entity::~Entity() {
   FML_DCHECK(context_.top_entity_ == this);
+  if (previous_entity_ != nullptr)
   context_.top_entity_ = previous_entity_;
+  context_.top_scale_x_ = previous_scale_x_;
+  context_.top_scale_y_ = previous_scale_y_;
 }
 
 SceneUpdateContext::Transform::Transform(SceneUpdateContext& context,
                                          const SkMatrix& transform)
     : Entity(context),
+      transform_(transform),
       previous_scale_x_(context.top_scale_x_),
       previous_scale_y_(context.top_scale_y_) {
-  if (!transform.isIdentity()) {
-    // TODO(SCN-192): The perspective and shear components in the matrix
-    // are not handled correctly.
-    MatrixDecomposition decomposition(transform);
-    if (decomposition.IsValid()) {
-      entity_node().SetTranslation(decomposition.translation().x(),  //
-                                   decomposition.translation().y(),  //
-                                   -decomposition.translation().z()  //
-      );
-
-      entity_node().SetScale(decomposition.scale().x(),  //
-                             decomposition.scale().y(),  //
-                             decomposition.scale().z()   //
-      );
-      context.top_scale_x_ *= decomposition.scale().x();
-      context.top_scale_y_ *= decomposition.scale().y();
-
-      entity_node().SetRotation(decomposition.rotation().fData[0],  //
-                                decomposition.rotation().fData[1],  //
-                                decomposition.rotation().fData[2],  //
-                                decomposition.rotation().fData[3]   //
-      );
-    }
-  }
+  context.top_scale_x_ *= transform.getScaleX();
+  context.top_scale_y_ *= transform.getScaleY();
 }
 
 SceneUpdateContext::Transform::Transform(SceneUpdateContext& context,
@@ -275,18 +257,46 @@ SceneUpdateContext::Transform::Transform(SceneUpdateContext& context,
                                          float scale_y,
                                          float scale_z)
     : Entity(context),
+      transform_(SkMatrix::MakeScale(scale_x, scale_y)),
       previous_scale_x_(context.top_scale_x_),
       previous_scale_y_(context.top_scale_y_) {
-  if (scale_x != 1.f || scale_y != 1.f || scale_z != 1.f) {
-    entity_node().SetScale(scale_x, scale_y, scale_z);
-    context.top_scale_x_ *= scale_x;
-    context.top_scale_y_ *= scale_y;
-  }
+  context.top_scale_x_ *= scale_x;
+  context.top_scale_y_ *= scale_y;
 }
 
 SceneUpdateContext::Transform::~Transform() {
-  context().top_scale_x_ = previous_scale_x_;
-  context().top_scale_y_ = previous_scale_y_;
+  if (entities_to_attach.size() > 1 && !transform.isIdentity()) {
+    scenic::EntityNode transform_node;
+
+    for (auto& [child_transform, child_node] : entites_to_attach_) {
+      // TODO(SCN-192): The perspective and shear components in the matrix
+      // are not handled correctly.
+      MatrixDecomposition decomposition(child_transform);
+      if (decomposition.IsValid()) {
+        child_node.SetTranslation(decomposition.translation().x(),  //
+                                  decomposition.translation().y(),  //
+                                  -decomposition.translation().z()  //
+        );
+
+        child_node.SetScale(decomposition.scale().x(),  //
+                            decomposition.scale().y(),  //
+                            decomposition.scale().z()   //
+        );
+
+        child_node.SetRotation(decomposition.rotation().fData[0],  //
+                               decomposition.rotation().fData[1],  //
+                               decomposition.rotation().fData[2],  //
+                               decomposition.rotation().fData[3]   //
+        );
+      }
+      transform_node.AddChild(child_node);
+    }
+  }
+  previous_entity_.entities_to_attach_.emplace_back({transform, std::move(transform_node)});
+  entities_to_attach_.clear();
+
+  context_.top_scale_x_ = previous_scale_x_;
+  context_.top_scale_y_ = previous_scale_y_;
 }
 
 SceneUpdateContext::Frame::Frame(SceneUpdateContext& context,

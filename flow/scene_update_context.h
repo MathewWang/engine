@@ -72,14 +72,29 @@ class SceneUpdateContext {
     virtual ~Entity();
 
     SceneUpdateContext& context() { return context_; }
-    scenic::EntityNode& entity_node() { return entity_node_; }
-    virtual scenic::ContainerNode& embedder_node() { return entity_node_; }
 
    private:
+    struct EntityToAttach {
+      SkMatrix transform_;
+      scenic::EntityNode entity_node;
+    };
+
+    std::vector<EntityToAttacth> entities_to_attach_;
     SceneUpdateContext& context_;
     Entity* const previous_entity_;
+  };
 
-    scenic::EntityNode entity_node_;
+  class Transform : public Entity {
+   public:
+    Transform(SceneUpdateContext& context, const SkMatrix& transform);
+    Transform(SceneUpdateContext& context, float scale_x,
+                                           float scale_y,
+                                           float scale_z);
+
+   private:
+    SkMatrix transform_;
+    float const previous_scale_x_;
+    float const previous_scale_y_;
   };
 
   class Transform : public Entity {
@@ -110,8 +125,6 @@ class SceneUpdateContext {
           Layer* layer = nullptr);
     virtual ~Frame();
 
-    scenic::ContainerNode& embedder_node() override { return opacity_node_; }
-
     void AddPaintLayer(Layer* layer);
 
    private:
@@ -119,7 +132,6 @@ class SceneUpdateContext {
     SkColor const color_;
     SkAlpha const opacity_;
 
-    scenic::OpacityNodeHACK opacity_node_;
     std::vector<Layer*> paint_layers_;
     SkRect paint_bounds_;
     Layer* layer_;
